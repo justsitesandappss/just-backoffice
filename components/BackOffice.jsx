@@ -521,6 +521,8 @@ const demoData = {
       start_date: "2026-05-01",
       end_date: "2026-05-08",
       notes: "Vue mer souhaitée",
+      status: "nouveau",
+      admin_note: "",
       contact_name: "Jean Dupont",
       contact_email: "jean@mail.com",
       contact_phone: "+33612345678",
@@ -537,6 +539,8 @@ const demoData = {
       date_start: "2026-04-15",
       date_end: "2026-04-15",
       notes: "Champagne à bord",
+      status: "en_cours",
+      admin_note: "Client VIP, priorité haute",
       contact_name: "Pierre Martin",
       contact_email: "pierre@mail.com",
       contact_phone: "+33611223344",
@@ -552,6 +556,8 @@ const demoData = {
       start_date: "2026-04-20",
       end_date: "2026-04-22",
       notes: "Couleur noire préférée",
+      status: "traite",
+      admin_note: "Lamborghini Huracán réservée",
       contact_name: "Lucas Moreau",
       contact_email: "lucas@mail.com",
       contact_phone: "+33699887766",
@@ -570,6 +576,8 @@ const demoData = {
       yacht_category: "Mega Yacht",
       cruise_style: "Luxe",
       notes: "Chef cuisinier requis",
+      status: "nouveau",
+      admin_note: "",
       contact_name: "Sophie Bernard",
       contact_email: "sophie@mail.com",
       contact_phone: "+33655667788",
@@ -583,6 +591,8 @@ const demoData = {
       sector: "Mode",
       budget: 15000,
       message: "Campagne Instagram Stories",
+      status: "refuse",
+      admin_note: "Budget insuffisant pour ce type de campagne",
       contact_name: "Marie Laurent",
       contact_email: "marie@mail.com",
       contact_phone: "+33698765432",
@@ -1372,6 +1382,8 @@ function DashboardPage({ data }) {
 
             <Badge color="info">{d._type}</Badge>
 
+            <StatusBadge status={d.status || "nouveau"} />
+
             <span
               style={{
                 fontSize: 11,
@@ -1452,9 +1464,161 @@ function ProfilesPage({ data }) {
   );
 }
 
-function DemandesPage({ data }) {
+// ============================================================
+// STATUS HELPERS
+// ============================================================
+const STATUS_CONFIG = {
+  nouveau: { label: "Nouveau", color: "info", dot: "#A9B7D1" },
+  en_cours: { label: "En cours", color: "accent", dot: "#D4AF37" },
+  traite: { label: "Traité", color: "success", dot: "#8FBF8F" },
+  refuse: { label: "Refusé", color: "danger", dot: "#C86A6A" },
+};
+
+const STATUS_OPTIONS = ["nouveau", "en_cours", "traite", "refuse"];
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.nouveau;
+  return (
+    <Badge color={cfg.color}>
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: cfg.dot,
+          display: "inline-block",
+          marginRight: 6,
+        }}
+      />
+      {cfg.label}
+    </Badge>
+  );
+}
+
+function FormField({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label
+        style={{
+          display: "block",
+          fontSize: 10,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: 1.2,
+          color: theme.textGhost,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: "100%",
+  padding: "12px 14px",
+  background: theme.surface2,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 14,
+  color: theme.text,
+  fontSize: 13,
+  fontFamily: font,
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color .18s ease",
+};
+
+const selectStyle = {
+  ...inputStyle,
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 14px center",
+  paddingRight: 36,
+  cursor: "pointer",
+};
+
+function ConfirmDialog({ message, onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 2000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.82)",
+        backdropFilter: "blur(8px)",
+        padding: 24,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        style={{
+          background: theme.surface,
+          borderRadius: 24,
+          border: `1px solid ${theme.border}`,
+          padding: 28,
+          maxWidth: 420,
+          width: "100%",
+          textAlign: "center",
+          boxShadow: theme.shadow,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: theme.dangerSoft,
+            border: `1px solid rgba(200,106,106,0.22)`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#E6B0B0",
+            margin: "0 auto 18px",
+          }}
+        >
+          {icons.trash}
+        </div>
+
+        <p
+          style={{
+            color: theme.textSoft,
+            fontSize: 14,
+            lineHeight: 1.7,
+            margin: "0 0 24px",
+          }}
+        >
+          {message}
+        </p>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <Btn variant="secondary" onClick={onCancel}>
+            Annuler
+          </Btn>
+          <Btn variant="danger" onClick={onConfirm}>
+            {icons.trash}
+            Supprimer
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DemandesPage({ data, onRefresh }) {
   const [tab, setTab] = useState("biens");
   const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const tabs = [
     { key: "biens", label: "Biens", icon: icons.home, table: "biens_demandes" },
@@ -1470,7 +1634,63 @@ function DemandesPage({ data }) {
   ];
 
   const activeTab = tabs.find((t) => t.key === tab);
-  const tableData = data[activeTab.table] || [];
+  const rawData = data[activeTab.table] || [];
+  const tableData =
+    statusFilter === "all"
+      ? rawData
+      : rawData.filter((r) => (r.status || "nouveau") === statusFilter);
+
+  // Count by status across current tab
+  const statusCounts = useMemo(() => {
+    const counts = { all: rawData.length, nouveau: 0, en_cours: 0, traite: 0, refuse: 0 };
+    rawData.forEach((r) => {
+      const s = r.status || "nouveau";
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    return counts;
+  }, [rawData]);
+
+  const handleUpdateStatus = async (row, newStatus) => {
+    setSaving(true);
+    try {
+      await supabase.update(activeTab.table, row.id, { status: newStatus });
+      if (onRefresh) await onRefresh();
+    } catch (err) {
+      console.error("Erreur update status:", err);
+    }
+    setSaving(false);
+  };
+
+  const handleSaveNote = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      await supabase.update(activeTab.table, editing.id, {
+        status: editing.status || "nouveau",
+        admin_note: editing.admin_note || "",
+      });
+      if (onRefresh) await onRefresh();
+      setEditing(null);
+    } catch (err) {
+      console.error("Erreur save:", err);
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await supabase.delete(activeTab.table, deleteTarget.id);
+      if (onRefresh) await onRefresh();
+      setDeleteTarget(null);
+      setSelected(null);
+      setEditing(null);
+    } catch (err) {
+      console.error("Erreur delete:", err);
+    }
+    setDeleting(false);
+  };
 
   const commonCols = [
     {
@@ -1488,6 +1708,11 @@ function DemandesPage({ data }) {
       render: (v) => <span style={{ fontWeight: 600 }}>{v || "—"}</span>,
     },
     { key: "contact_email", label: "Email" },
+    {
+      key: "status",
+      label: "Statut",
+      render: (v) => <StatusBadge status={v || "nouveau"} />,
+    },
     { key: "created_at", label: "Date", render: (v) => formatDate(v) },
   ];
 
@@ -1535,15 +1760,21 @@ function DemandesPage({ data }) {
     ...commonCols.slice(2),
   ];
 
+  // Keys to hide in detail modal
+  const hiddenKeys = new Set(["_type", "_icon"]);
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      {/* Category Tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => {
               setTab(t.key);
               setSelected(null);
+              setEditing(null);
+              setStatusFilter("all");
             }}
             style={{
               display: "flex",
@@ -1583,24 +1814,367 @@ function DemandesPage({ data }) {
         ))}
       </div>
 
+      {/* Status Filter Pills */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+        {[
+          { key: "all", label: "Tous" },
+          ...STATUS_OPTIONS.map((s) => ({ key: s, label: STATUS_CONFIG[s].label })),
+        ].map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setStatusFilter(f.key)}
+            style={{
+              padding: "7px 13px",
+              borderRadius: 999,
+              border: `1px solid ${
+                statusFilter === f.key ? theme.borderStrong : "rgba(255,255,255,0.04)"
+              }`,
+              background:
+                statusFilter === f.key ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.01)",
+              color: statusFilter === f.key ? theme.text : theme.textMuted,
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: "pointer",
+              fontFamily: font,
+              transition: "all .18s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {f.key !== "all" && (
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: STATUS_CONFIG[f.key]?.dot || theme.textMuted,
+                }}
+              />
+            )}
+            {f.label}
+            <span
+              style={{
+                fontSize: 10,
+                fontFamily: fontMono,
+                color: theme.textGhost,
+                marginLeft: 2,
+              }}
+            >
+              {statusCounts[f.key] || 0}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <DataTable
         columns={columns}
         data={tableData}
         onRowClick={setSelected}
         actions={(row) => [
-          <IconBtn key="v" icon={icons.eye} title="Voir" onClick={() => setSelected(row)} />,
+          <IconBtn
+            key="v"
+            icon={icons.eye}
+            title="Voir"
+            onClick={() => setSelected(row)}
+          />,
+          <IconBtn
+            key="e"
+            icon={icons.edit}
+            title="Gérer"
+            onClick={() =>
+              setEditing({
+                ...row,
+                status: row.status || "nouveau",
+                admin_note: row.admin_note || "",
+              })
+            }
+          />,
+          <IconBtn
+            key="d"
+            icon={icons.trash}
+            title="Supprimer"
+            danger
+            onClick={() => setDeleteTarget(row)}
+          />,
         ]}
       />
 
-      {selected && (
+      {/* Detail Modal */}
+      {selected && !editing && (
         <Modal
           title={`Demande #${selected.id} — ${activeTab.label}`}
           onClose={() => setSelected(null)}
         >
-          {Object.entries(selected).map(([k, v]) => (
-            <DetailRow key={k} label={k.replace(/_/g, " ")} value={v} />
-          ))}
+          <div style={{ marginBottom: 20 }}>
+            <StatusBadge status={selected.status || "nouveau"} />
+          </div>
+
+          {Object.entries(selected)
+            .filter(([k]) => !hiddenKeys.has(k))
+            .map(([k, v]) => {
+              if (k === "status")
+                return (
+                  <DetailRow
+                    key={k}
+                    label="Statut"
+                    value={STATUS_CONFIG[v]?.label || v || "Nouveau"}
+                  />
+                );
+              if (k === "admin_note")
+                return (
+                  <DetailRow
+                    key={k}
+                    label="Note admin"
+                    value={v || "Aucune note"}
+                  />
+                );
+              return (
+                <DetailRow key={k} label={k.replace(/_/g, " ")} value={v} />
+              );
+            })}
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginTop: 24,
+              justifyContent: "flex-end",
+            }}
+          >
+            <Btn
+              variant="secondary"
+              onClick={() => {
+                setEditing({
+                  ...selected,
+                  status: selected.status || "nouveau",
+                  admin_note: selected.admin_note || "",
+                });
+                setSelected(null);
+              }}
+            >
+              {icons.edit}
+              Gérer cette demande
+            </Btn>
+          </div>
         </Modal>
+      )}
+
+      {/* Edit Modal */}
+      {editing && (
+        <Modal
+          title={`Gérer — Demande #${editing.id}`}
+          onClose={() => setEditing(null)}
+        >
+          {/* Quick status bar */}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 24,
+              padding: "16px 18px",
+              background: theme.surface2,
+              borderRadius: 18,
+              border: `1px solid ${theme.border}`,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: 1.2,
+                color: theme.textGhost,
+                display: "flex",
+                alignItems: "center",
+                marginRight: 6,
+              }}
+            >
+              Statut rapide
+            </span>
+            {STATUS_OPTIONS.map((s) => {
+              const cfg = STATUS_CONFIG[s];
+              const active = editing.status === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setEditing({ ...editing, status: s })}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    border: active
+                      ? `1px solid ${cfg.dot}`
+                      : `1px solid ${theme.border}`,
+                    background: active
+                      ? `${cfg.dot}18`
+                      : "rgba(255,255,255,0.02)",
+                    color: active ? cfg.dot : theme.textMuted,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: font,
+                    transition: "all .18s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: cfg.dot,
+                      opacity: active ? 1 : 0.4,
+                    }}
+                  />
+                  {cfg.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Contact summary */}
+          <div
+            style={{
+              padding: "14px 18px",
+              background: theme.surface2,
+              borderRadius: 16,
+              border: `1px solid ${theme.border}`,
+              marginBottom: 20,
+              display: "flex",
+              gap: 20,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: theme.textGhost,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 4,
+                }}
+              >
+                Contact
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
+                {editing.contact_name || editing.brand || "—"}
+              </div>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: theme.textGhost,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 4,
+                }}
+              >
+                Email
+              </div>
+              <div style={{ fontSize: 13, color: theme.textSoft }}>
+                {editing.contact_email || "—"}
+              </div>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: theme.textGhost,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 4,
+                }}
+              >
+                Téléphone
+              </div>
+              <div style={{ fontSize: 13, color: theme.textSoft }}>
+                {editing.contact_phone || "—"}
+              </div>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: theme.textGhost,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 4,
+                }}
+              >
+                Reçue le
+              </div>
+              <div style={{ fontSize: 13, color: theme.textSoft }}>
+                {formatDateTime(editing.created_at)}
+              </div>
+            </div>
+          </div>
+
+          {/* Admin note */}
+          <FormField label="Note interne (admin)">
+            <textarea
+              value={editing.admin_note}
+              onChange={(e) =>
+                setEditing({ ...editing, admin_note: e.target.value })
+              }
+              rows={4}
+              placeholder="Ajouter une note pour le suivi de cette demande..."
+              style={{
+                ...inputStyle,
+                resize: "vertical",
+                minHeight: 90,
+                lineHeight: 1.7,
+              }}
+            />
+          </FormField>
+
+          {/* Action buttons */}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginTop: 24,
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+            }}
+          >
+            <Btn
+              variant="danger"
+              onClick={() => setDeleteTarget(editing)}
+            >
+              {icons.trash}
+              Supprimer
+            </Btn>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn variant="secondary" onClick={() => setEditing(null)}>
+                Annuler
+              </Btn>
+              <Btn
+                variant="primary"
+                onClick={handleSaveNote}
+                disabled={saving}
+              >
+                {saving ? "Enregistrement..." : "Enregistrer"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          message={`Supprimer définitivement la demande #${deleteTarget.id} de ${
+            deleteTarget.contact_name || deleteTarget.brand || "ce contact"
+          } ? Cette action est irréversible.`}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+        />
       )}
     </div>
   );
@@ -2216,7 +2790,7 @@ export default function BackOffice() {
             <>
               {page === "dashboard" && <DashboardPage data={data} />}
               {page === "profiles" && <ProfilesPage data={data} />}
-              {page === "demandes" && <DemandesPage data={data} />}
+              {page === "demandes" && <DemandesPage data={data} onRefresh={loadData} />}
               {page === "events" && <EventsPage data={data} />}
               {page === "concours" && <ConcoursPage data={data} />}
               {page === "map" && <MapPage data={data} />}
