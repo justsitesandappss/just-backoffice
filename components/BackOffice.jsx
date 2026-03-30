@@ -1416,12 +1416,72 @@ function DashboardPage({ data }) {
   );
 }
 
-function ProfilesPage({ data }) {
+function ProfilesPage({ data, onRefresh }) {
   const [selected, setSelected] = useState(null);
+  const [vipFilter, setVipFilter] = useState("all");
   const profiles = data.profiles || [];
+
+  const filtered =
+    vipFilter === "all"
+      ? profiles
+      : vipFilter === "vip"
+      ? profiles.filter((p) => p.is_vip)
+      : profiles.filter((p) => !p.is_vip);
+
+  const vipCount = profiles.filter((p) => p.is_vip).length;
+
+  const handleToggleVip = async (row) => {
+    try {
+      await supabase.update("profiles", row.id, { is_vip: !row.is_vip });
+      if (onRefresh) await onRefresh();
+      if (selected && selected.id === row.id) {
+        setSelected({ ...row, is_vip: !row.is_vip });
+      }
+    } catch (err) {
+      console.error("Erreur toggle VIP:", err);
+    }
+  };
 
   return (
     <div>
+      {/* VIP filter pills */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        {[
+          { key: "all", label: "Tous", count: profiles.length },
+          { key: "vip", label: "VIP", count: vipCount },
+          { key: "standard", label: "Standard", count: profiles.length - vipCount },
+        ].map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setVipFilter(f.key)}
+            style={{
+              padding: "7px 13px",
+              borderRadius: 999,
+              border: `1px solid ${
+                vipFilter === f.key ? theme.borderStrong : "rgba(255,255,255,0.04)"
+              }`,
+              background:
+                vipFilter === f.key ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.01)",
+              color: vipFilter === f.key ? theme.text : theme.textMuted,
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: "pointer",
+              fontFamily: font,
+              transition: "all .18s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {f.key === "vip" && (
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: theme.gold }} />
+            )}
+            {f.label}
+            <span style={{ fontSize: 10, fontFamily: fontMono, color: theme.textGhost }}>{f.count}</span>
+          </button>
+        ))}
+      </div>
+
       <DataTable
         columns={[
           {
@@ -1443,7 +1503,7 @@ function ProfilesPage({ data }) {
             render: (v) => formatDate(v),
           },
         ]}
-        data={profiles}
+        data={filtered}
         onRowClick={setSelected}
         actions={(row) => [
           <IconBtn key="v" icon={icons.eye} title="Voir" onClick={() => setSelected(row)} />,
@@ -1458,6 +1518,37 @@ function ProfilesPage({ data }) {
           <DetailRow label="Téléphone" value={selected.phone} />
           <DetailRow label="VIP" value={selected.is_vip ? "Oui" : "Non"} />
           <DetailRow label="Inscrit le" value={formatDateTime(selected.created_at)} />
+
+          {/* VIP Toggle */}
+          <div
+            style={{
+              marginTop: 24,
+              padding: "16px 20px",
+              background: selected.is_vip ? theme.accentSoft : theme.surface2,
+              borderRadius: 18,
+              border: `1px solid ${selected.is_vip ? theme.accentBorder : theme.border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
+                {selected.is_vip ? "Membre VIP" : "Membre Standard"}
+              </div>
+              <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                {selected.is_vip
+                  ? "Accès aux events VIP et concours exclusifs"
+                  : "Promouvoir en VIP pour débloquer les avantages"}
+              </div>
+            </div>
+            <Btn
+              variant={selected.is_vip ? "danger" : "primary"}
+              onClick={() => handleToggleVip(selected)}
+            >
+              {selected.is_vip ? "Retirer VIP" : "Promouvoir VIP"}
+            </Btn>
+          </div>
         </Modal>
       )}
     </div>
@@ -2180,12 +2271,102 @@ function DemandesPage({ data, onRefresh }) {
   );
 }
 
-function EventsPage({ data }) {
+function EventsPage({ data, onRefresh }) {
   const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const events = data.events || [];
+
+  const emptyEvent = {
+    artist: "",
+    type: "Concert",
+    place: "",
+    date: "",
+    time: "",
+    isodate: "",
+    image: "",
+    description: "",
+  };
+
+  const [form, setForm] = useState(emptyEvent);
+
+  const updateForm = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.artist || !form.date) return;
+    setSaving(true);
+    try {
+      if (editing) {
+        await supabase.update("events", editing.id, form);
+      } else {
+        await supabase.insert("events", form);
+      }
+      if (onRefresh) await onRefresh();
+      setEditing(null);
+      setCreating(false);
+      setForm(emptyEvent);
+    } catch (err) {
+      console.error("Erreur save event:", err);
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    try {
+      await supabase.delete("events", deleteTarget.id);
+      if (onRefresh) await onRefresh();
+      setDeleteTarget(null);
+      setSelected(null);
+      setEditing(null);
+    } catch (err) {
+      console.error("Erreur delete event:", err);
+    }
+    setSaving(false);
+  };
+
+  const openEdit = (row) => {
+    setForm({
+      artist: row.artist || "",
+      type: row.type || "Concert",
+      place: row.place || "",
+      date: row.date || "",
+      time: row.time || "",
+      isodate: row.isodate || "",
+      image: row.image || "",
+      description: row.description || "",
+    });
+    setEditing(row);
+    setCreating(false);
+    setSelected(null);
+  };
+
+  const openCreate = () => {
+    setForm(emptyEvent);
+    setEditing(null);
+    setCreating(true);
+    setSelected(null);
+  };
+
+  const EVENT_TYPES = ["Concert", "Soirée VIP", "Festival", "Showcase", "Gala", "Autre"];
+
+  const showForm = creating || editing;
 
   return (
     <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 18 }}>
+        <Btn variant="primary" onClick={openCreate}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nouvel event
+        </Btn>
+      </div>
+
       <DataTable
         columns={[
           {
@@ -2211,36 +2392,278 @@ function EventsPage({ data }) {
         onRowClick={setSelected}
         actions={(row) => [
           <IconBtn key="v" icon={icons.eye} title="Voir" onClick={() => setSelected(row)} />,
+          <IconBtn key="e" icon={icons.edit} title="Modifier" onClick={() => openEdit(row)} />,
+          <IconBtn key="d" icon={icons.trash} title="Supprimer" danger onClick={() => setDeleteTarget(row)} />,
         ]}
       />
 
-      {selected && (
+      {/* Detail Modal */}
+      {selected && !showForm && (
         <Modal title={`Event: ${selected.artist}`} onClose={() => setSelected(null)}>
-          {Object.entries(selected).map(([k, v]) => (
-            <DetailRow key={k} label={k.replace(/_/g, " ")} value={v} />
-          ))}
+          <DetailRow label="Artiste / Nom" value={selected.artist} />
+          <DetailRow label="Type" value={selected.type} />
+          <DetailRow label="Lieu" value={selected.place} />
+          <DetailRow label="Date" value={selected.date} />
+          <DetailRow label="Heure" value={selected.time} />
+          <DetailRow label="Description" value={selected.description} />
+          {selected.image && <DetailRow label="Image" value={selected.image} />}
+          <DetailRow label="Créé le" value={formatDateTime(selected.created_at)} />
+
+          <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+            <Btn variant="danger" onClick={() => { setDeleteTarget(selected); setSelected(null); }}>
+              {icons.trash} Supprimer
+            </Btn>
+            <Btn variant="secondary" onClick={() => openEdit(selected)}>
+              {icons.edit} Modifier
+            </Btn>
+          </div>
         </Modal>
+      )}
+
+      {/* Create / Edit Modal */}
+      {showForm && (
+        <Modal
+          title={editing ? `Modifier — ${editing.artist}` : "Nouvel event"}
+          onClose={() => { setEditing(null); setCreating(false); setForm(emptyEvent); }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <FormField label="Artiste / Nom *">
+              <input
+                value={form.artist}
+                onChange={(e) => updateForm("artist", e.target.value)}
+                placeholder="Ex: DJ Snake"
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Type">
+              <select
+                value={form.type}
+                onChange={(e) => updateForm("type", e.target.value)}
+                style={selectStyle}
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t} style={{ background: theme.surface2, color: theme.text }}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <FormField label="Lieu">
+            <input
+              value={form.place}
+              onChange={(e) => updateForm("place", e.target.value)}
+              placeholder="Ex: Accor Arena, Paris"
+              style={inputStyle}
+            />
+          </FormField>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <FormField label="Date (affichée)">
+              <input
+                value={form.date}
+                onChange={(e) => updateForm("date", e.target.value)}
+                placeholder="Ex: 12 Avril 2026"
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Heure">
+              <input
+                value={form.time}
+                onChange={(e) => updateForm("time", e.target.value)}
+                placeholder="Ex: 21:00"
+                style={inputStyle}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Date ISO (pour tri)">
+            <input
+              type="datetime-local"
+              value={form.isodate ? form.isodate.slice(0, 16) : ""}
+              onChange={(e) => updateForm("isodate", e.target.value ? new Date(e.target.value).toISOString() : "")}
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="URL de l'image">
+            <input
+              value={form.image}
+              onChange={(e) => updateForm("image", e.target.value)}
+              placeholder="https://..."
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="Description">
+            <textarea
+              value={form.description}
+              onChange={(e) => updateForm("description", e.target.value)}
+              placeholder="Description de l'event..."
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical", minHeight: 80, lineHeight: 1.7 }}
+            />
+          </FormField>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => { setEditing(null); setCreating(false); setForm(emptyEvent); }}>
+              Annuler
+            </Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving || !form.artist}>
+              {saving ? "Enregistrement..." : editing ? "Enregistrer" : "Créer l'event"}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          message={`Supprimer l'event "${deleteTarget.artist}" ? Cette action est irréversible.`}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+        />
       )}
     </div>
   );
 }
 
-function ConcoursPage({ data }) {
+function ConcoursPage({ data, onRefresh }) {
   const [selected, setSelected] = useState(null);
   const [showWinners, setShowWinners] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const concours = data.concours || [];
   const winners = data.concours_winners || [];
 
+  const emptyConcours = {
+    title: "",
+    description: "",
+    prize_name: "",
+    prize_value: "",
+    prize_image_url: "",
+    background_image_url: "",
+    end_date: "",
+    price_per_month: 1,
+    is_active: true,
+  };
+
+  const [form, setForm] = useState(emptyConcours);
+  const updateForm = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.title) return;
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        price_per_month: Number(form.price_per_month) || 0,
+      };
+      if (editing) {
+        await supabase.update("concours", editing.id, payload);
+      } else {
+        await supabase.insert("concours", payload);
+      }
+      if (onRefresh) await onRefresh();
+      setEditing(null);
+      setCreating(false);
+      setForm(emptyConcours);
+    } catch (err) {
+      console.error("Erreur save concours:", err);
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    try {
+      const table = deleteTarget._isWinner ? "concours_winners" : "concours";
+      await supabase.delete(table, deleteTarget.id);
+      if (onRefresh) await onRefresh();
+      setDeleteTarget(null);
+      setSelected(null);
+      setEditing(null);
+    } catch (err) {
+      console.error("Erreur delete concours:", err);
+    }
+    setSaving(false);
+  };
+
+  const handleToggleActive = async (row) => {
+    try {
+      await supabase.update("concours", row.id, { is_active: !row.is_active });
+      if (onRefresh) await onRefresh();
+    } catch (err) {
+      console.error("Erreur toggle:", err);
+    }
+  };
+
+  const openEdit = (row) => {
+    setForm({
+      title: row.title || "",
+      description: row.description || "",
+      prize_name: row.prize_name || "",
+      prize_value: row.prize_value || "",
+      prize_image_url: row.prize_image_url || "",
+      background_image_url: row.background_image_url || "",
+      end_date: row.end_date ? row.end_date.slice(0, 16) : "",
+      price_per_month: row.price_per_month || 1,
+      is_active: row.is_active ?? true,
+    });
+    setEditing(row);
+    setCreating(false);
+    setSelected(null);
+  };
+
+  const openCreate = () => {
+    setForm(emptyConcours);
+    setEditing(null);
+    setCreating(true);
+    setSelected(null);
+  };
+
+  const showForm = creating || editing;
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <Btn variant={!showWinners ? "primary" : "secondary"} onClick={() => setShowWinners(false)}>
-          {icons.concours}
-          Concours
-        </Btn>
-        <Btn variant={showWinners ? "primary" : "secondary"} onClick={() => setShowWinners(true)}>
-          Gagnants
-        </Btn>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant={!showWinners ? "primary" : "secondary"} onClick={() => setShowWinners(false)}>
+            {icons.concours}
+            Concours
+            <span style={{
+              fontSize: 10, fontFamily: fontMono,
+              background: !showWinners ? "#050505" : "rgba(255,255,255,0.05)",
+              color: !showWinners ? theme.accent : theme.textGhost,
+              padding: "3px 7px", borderRadius: 999, marginLeft: 2,
+            }}>{concours.length}</span>
+          </Btn>
+          <Btn variant={showWinners ? "primary" : "secondary"} onClick={() => setShowWinners(true)}>
+            Gagnants
+            <span style={{
+              fontSize: 10, fontFamily: fontMono,
+              background: showWinners ? "#050505" : "rgba(255,255,255,0.05)",
+              color: showWinners ? theme.accent : theme.textGhost,
+              padding: "3px 7px", borderRadius: 999, marginLeft: 2,
+            }}>{winners.length}</span>
+          </Btn>
+        </div>
+
+        {!showWinners && (
+          <Btn variant="primary" onClick={openCreate}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nouveau concours
+          </Btn>
+        )}
       </div>
 
       {!showWinners ? (
@@ -2274,6 +2697,8 @@ function ConcoursPage({ data }) {
           onRowClick={setSelected}
           actions={(row) => [
             <IconBtn key="v" icon={icons.eye} title="Voir" onClick={() => setSelected(row)} />,
+            <IconBtn key="e" icon={icons.edit} title="Modifier" onClick={() => openEdit(row)} />,
+            <IconBtn key="d" icon={icons.trash} title="Supprimer" danger onClick={() => setDeleteTarget(row)} />,
           ]}
         />
       ) : (
@@ -2300,16 +2725,195 @@ function ConcoursPage({ data }) {
           onRowClick={setSelected}
           actions={(row) => [
             <IconBtn key="v" icon={icons.eye} title="Voir" onClick={() => setSelected(row)} />,
+            <IconBtn key="d" icon={icons.trash} title="Supprimer" danger onClick={() => setDeleteTarget({ ...row, _isWinner: true })} />,
           ]}
         />
       )}
 
-      {selected && (
+      {/* Detail Modal */}
+      {selected && !showForm && (
         <Modal title={selected.title || "Détails"} onClose={() => setSelected(null)}>
-          {Object.entries(selected).map(([k, v]) => (
-            <DetailRow key={k} label={k.replace(/_/g, " ")} value={v} />
-          ))}
+          {Object.entries(selected)
+            .filter(([k]) => k !== "_isWinner")
+            .map(([k, v]) => {
+              if (k === "is_active")
+                return <DetailRow key={k} label="Statut" value={v ? "Actif" : "Terminé"} />;
+              return <DetailRow key={k} label={k.replace(/_/g, " ")} value={v} />;
+            })}
+
+          {!showWinners && (
+            <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "space-between", flexWrap: "wrap" }}>
+              <Btn
+                variant={selected.is_active ? "danger" : "primary"}
+                onClick={() => { handleToggleActive(selected); setSelected(null); }}
+              >
+                {selected.is_active ? "Désactiver" : "Réactiver"}
+              </Btn>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Btn variant="danger" onClick={() => { setDeleteTarget(selected); setSelected(null); }}>
+                  {icons.trash} Supprimer
+                </Btn>
+                <Btn variant="secondary" onClick={() => openEdit(selected)}>
+                  {icons.edit} Modifier
+                </Btn>
+              </div>
+            </div>
+          )}
         </Modal>
+      )}
+
+      {/* Create / Edit Modal */}
+      {showForm && (
+        <Modal
+          title={editing ? `Modifier — ${editing.title}` : "Nouveau concours"}
+          onClose={() => { setEditing(null); setCreating(false); setForm(emptyConcours); }}
+        >
+          <FormField label="Titre du concours *">
+            <input
+              value={form.title}
+              onChange={(e) => updateForm("title", e.target.value)}
+              placeholder="Ex: Gagnez une Rolex Submariner"
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="Description">
+            <textarea
+              value={form.description}
+              onChange={(e) => updateForm("description", e.target.value)}
+              placeholder="Description du concours..."
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical", minHeight: 80, lineHeight: 1.7 }}
+            />
+          </FormField>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <FormField label="Nom du prix">
+              <input
+                value={form.prize_name}
+                onChange={(e) => updateForm("prize_name", e.target.value)}
+                placeholder="Ex: Rolex Submariner"
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Valeur du prix">
+              <input
+                value={form.prize_value}
+                onChange={(e) => updateForm("prize_value", e.target.value)}
+                placeholder="Ex: 9.500€"
+                style={inputStyle}
+              />
+            </FormField>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <FormField label="Date de fin">
+              <input
+                type="datetime-local"
+                value={form.end_date ? form.end_date.slice(0, 16) : ""}
+                onChange={(e) => updateForm("end_date", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Prix / mois (€)">
+              <input
+                type="number"
+                value={form.price_per_month}
+                onChange={(e) => updateForm("price_per_month", e.target.value)}
+                min="0"
+                step="0.01"
+                style={inputStyle}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Image du prix (URL)">
+            <input
+              value={form.prize_image_url}
+              onChange={(e) => updateForm("prize_image_url", e.target.value)}
+              placeholder="https://..."
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="Image de fond (URL)">
+            <input
+              value={form.background_image_url}
+              onChange={(e) => updateForm("background_image_url", e.target.value)}
+              placeholder="https://..."
+              style={inputStyle}
+            />
+          </FormField>
+
+          {/* Active toggle */}
+          <div
+            style={{
+              padding: "14px 18px",
+              background: theme.surface2,
+              borderRadius: 16,
+              border: `1px solid ${theme.border}`,
+              marginTop: 8,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>Concours actif</div>
+              <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                Visible dans l'app mobile
+              </div>
+            </div>
+            <button
+              onClick={() => updateForm("is_active", !form.is_active)}
+              style={{
+                width: 48,
+                height: 28,
+                borderRadius: 999,
+                border: "none",
+                cursor: "pointer",
+                background: form.is_active
+                  ? `linear-gradient(135deg, ${theme.goldLight}, ${theme.gold})`
+                  : "rgba(255,255,255,0.08)",
+                position: "relative",
+                transition: "background .24s ease",
+              }}
+            >
+              <span
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: form.is_active ? "#050505" : "rgba(255,255,255,0.5)",
+                  position: "absolute",
+                  top: 3,
+                  left: form.is_active ? 23 : 3,
+                  transition: "left .24s ease, background .24s ease",
+                }}
+              />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => { setEditing(null); setCreating(false); setForm(emptyConcours); }}>
+              Annuler
+            </Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving || !form.title}>
+              {saving ? "Enregistrement..." : editing ? "Enregistrer" : "Créer le concours"}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <ConfirmDialog
+          message={`Supprimer "${deleteTarget.title}" ? Cette action est irréversible.`}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+        />
       )}
     </div>
   );
@@ -2789,10 +3393,10 @@ export default function BackOffice() {
           ) : (
             <>
               {page === "dashboard" && <DashboardPage data={data} />}
-              {page === "profiles" && <ProfilesPage data={data} />}
+              {page === "profiles" && <ProfilesPage data={data} onRefresh={loadData} />}
               {page === "demandes" && <DemandesPage data={data} onRefresh={loadData} />}
-              {page === "events" && <EventsPage data={data} />}
-              {page === "concours" && <ConcoursPage data={data} />}
+              {page === "events" && <EventsPage data={data} onRefresh={loadData} />}
+              {page === "concours" && <ConcoursPage data={data} onRefresh={loadData} />}
               {page === "map" && <MapPage data={data} />}
               {page === "notifications" && <NotificationsPage />}
             </>
