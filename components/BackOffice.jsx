@@ -3018,83 +3018,401 @@ function MapPage({ data }) {
   );
 }
 
-function NotificationsPage() {
+function NotificationsPage({ data }) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  const profiles = data.profiles || [];
+  const tokensCount = profiles.filter(
+    (p) => p.expo_push_token && p.expo_push_token.startsWith("ExponentPushToken")
+  ).length;
+
+  // Load notification history
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetchData("notifications_history", {
+        order: "sent_at.desc",
+        limit: 20,
+      });
+      setHistory(res.data || []);
+    } catch (err) {
+      console.error("Erreur chargement historique:", err);
+    }
+    setLoadingHistory(false);
+  };
+
+  const handleSend = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setSending(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/admin/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), body: body.trim(), target: "all" }),
+      });
+
+      const data = await res.json();
+
+      if (data.error && data.recipients === 0) {
+        setResult({ type: "warning", message: data.error });
+      } else if (data.error) {
+        setResult({ type: "error", message: data.error });
+      } else {
+        setResult({
+          type: "success",
+          message: `Envoyé à ${data.delivered}/${data.recipients} utilisateurs${
+            data.failed > 0 ? ` (${data.failed} échecs)` : ""
+          }`,
+        });
+        setTitle("");
+        setBody("");
+        await loadHistory();
+      }
+    } catch (err) {
+      setResult({ type: "error", message: "Erreur réseau" });
+    }
+
+    setSending(false);
+  };
+
+  const charLimit = 178;
+  const bodyLength = body.length;
+
   return (
-    <div
-      style={{
-        minHeight: 420,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 620,
-          padding: 36,
-          borderRadius: 28,
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.005))",
-          border: `1px solid ${theme.border}`,
-          textAlign: "center",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-        }}
-      >
-        <div
-          style={{
-            width: 76,
-            height: 76,
-            borderRadius: "50%",
-            background: theme.accentSoft,
-            border: `1px solid ${theme.accentBorder}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: theme.accent,
-            margin: "0 auto 20px",
-          }}
-        >
-          {icons.notif}
+    <div>
+      {/* Compose Section */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+        {/* Left: Compose Form */}
+        <div style={{ flex: "1 1 420px", minWidth: 320 }}>
+          <div
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.005))",
+              borderRadius: 24,
+              border: `1px solid ${theme.border}`,
+              padding: 24,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 999,
+                  background: theme.accentSoft,
+                  border: `1px solid ${theme.accentBorder}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: theme.accent,
+                  flexShrink: 0,
+                }}
+              >
+                {icons.notif}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: theme.text, letterSpacing: -0.3 }}>
+                  Nouvelle notification
+                </h3>
+                <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                  Envoi à tous les utilisateurs via Expo Push
+                </div>
+              </div>
+            </div>
+
+            <FormField label="Titre">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex: Nouvel event exclusif ce week-end"
+                maxLength={65}
+                style={inputStyle}
+              />
+            </FormField>
+
+            <FormField label="Message">
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Écris le contenu de la notification..."
+                rows={4}
+                maxLength={charLimit}
+                style={{ ...inputStyle, resize: "vertical", minHeight: 100, lineHeight: 1.7 }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  marginTop: 6,
+                  fontSize: 10,
+                  color: bodyLength > charLimit * 0.9 ? "#C86A6A" : theme.textGhost,
+                  fontFamily: fontMono,
+                }}
+              >
+                {bodyLength}/{charLimit}
+              </div>
+            </FormField>
+
+            {/* Token count info */}
+            <div
+              style={{
+                padding: "12px 16px",
+                background: theme.surface2,
+                borderRadius: 14,
+                border: `1px solid ${theme.border}`,
+                marginBottom: 18,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <span style={{ color: tokensCount > 0 ? theme.success : theme.danger }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  {tokensCount > 0 ? (
+                    <polyline points="8,12 11,15 16,9" />
+                  ) : (
+                    <>
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </>
+                  )}
+                </svg>
+              </span>
+              <span style={{ fontSize: 12, color: theme.textSoft }}>
+                <strong style={{ color: theme.text }}>{tokensCount}</strong> appareil{tokensCount !== 1 ? "s" : ""} enregistré{tokensCount !== 1 ? "s" : ""}
+                {tokensCount === 0 && (
+                  <span style={{ color: theme.textMuted }}>
+                    {" "}— les utilisateurs doivent ouvrir l'app pour s'enregistrer
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {/* Result feedback */}
+            {result && (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 14,
+                  marginBottom: 18,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background:
+                    result.type === "success"
+                      ? theme.successSoft
+                      : result.type === "warning"
+                      ? theme.accentSoft
+                      : theme.dangerSoft,
+                  color:
+                    result.type === "success"
+                      ? "#CFE7CF"
+                      : result.type === "warning"
+                      ? theme.goldLight
+                      : "#E6B0B0",
+                  border: `1px solid ${
+                    result.type === "success"
+                      ? "rgba(143,191,143,0.22)"
+                      : result.type === "warning"
+                      ? theme.accentBorder
+                      : "rgba(200,106,106,0.22)"
+                  }`,
+                }}
+              >
+                {result.message}
+              </div>
+            )}
+
+            <Btn
+              variant="primary"
+              onClick={handleSend}
+              disabled={sending || !title.trim() || !body.trim() || tokensCount === 0}
+              style={{ width: "100%" }}
+            >
+              {sending ? (
+                <>
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      border: "2px solid rgba(5,5,5,0.2)",
+                      borderTopColor: "#050505",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  Envoi en cours...
+                </>
+              ) : (
+                <>
+                  {icons.plane}
+                  Envoyer à tous ({tokensCount})
+                </>
+              )}
+            </Btn>
+          </div>
         </div>
 
-        <h3
-          style={{
-            color: theme.text,
-            margin: 0,
-            fontSize: 22,
-            letterSpacing: -0.6,
-          }}
-        >
-          Notifications Push
-        </h3>
+        {/* Right: Phone Preview */}
+        <div style={{ flex: "0 0 280px" }}>
+          <div
+            style={{
+              fontSize: 10,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: theme.textGhost,
+              marginBottom: 10,
+            }}
+          >
+            Aperçu
+          </div>
 
-        <p
-          style={{
-            color: theme.textSoft,
-            fontSize: 13,
-            maxWidth: 420,
-            margin: "14px auto 0",
-            lineHeight: 1.8,
-          }}
-        >
-          Cette section sera disponible quand ton service de push sera branché.
-          On pourra ensuite piloter les campagnes depuis cette console privée.
-        </p>
+          <div
+            style={{
+              background: "#1C1C1E",
+              borderRadius: 24,
+              padding: "16px 14px",
+              border: `1px solid ${theme.border}`,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+            }}
+          >
+            {/* Mock notification */}
+            <div
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                borderRadius: 16,
+                padding: "12px 14px",
+                backdropFilter: "blur(20px)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 5,
+                    background: `linear-gradient(135deg, ${theme.goldLight}, ${theme.gold})`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 7,
+                    fontWeight: 800,
+                    color: "#050505",
+                  }}
+                >
+                  JA
+                </div>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", fontWeight: 600, letterSpacing: 0.5 }}>
+                  Just Agency
+                </span>
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>
+                  maintenant
+                </span>
+              </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            justifyContent: "center",
-            marginTop: 18,
-            flexWrap: "wrap",
-          }}
-        >
-          <Badge color="muted">FCM</Badge>
-          <Badge color="muted">OneSignal</Badge>
-          <Badge color="muted">Expo</Badge>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF", marginBottom: 3, lineHeight: 1.3 }}>
+                {title || "Titre de la notification"}
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                {body || "Le contenu du message apparaîtra ici..."}
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* History Section */}
+      <div style={{ marginTop: 36 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div
+              style={{
+                fontSize: 10,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: theme.textGhost,
+                marginBottom: 6,
+              }}
+            >
+              Historique
+            </div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: theme.text, letterSpacing: -0.3 }}>
+              Notifications envoyées
+            </h3>
+          </div>
+          <Btn variant="secondary" onClick={loadHistory}>
+            {icons.refresh}
+            Actualiser
+          </Btn>
+        </div>
+
+        {loadingHistory ? (
+          <div style={{ textAlign: "center", padding: 40, color: theme.textMuted, fontSize: 13 }}>
+            Chargement...
+          </div>
+        ) : history.length === 0 ? (
+          <div
+            style={{
+              padding: 34,
+              textAlign: "center",
+              color: theme.textMuted,
+              fontSize: 13,
+              background: theme.surface,
+              borderRadius: 20,
+              border: `1px solid ${theme.border}`,
+            }}
+          >
+            Aucune notification envoyée
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {history.map((n) => (
+              <div
+                key={n.id}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 14,
+                  padding: "16px 18px",
+                  background: theme.surface,
+                  borderRadius: 18,
+                  border: `1px solid ${theme.border}`,
+                }}
+              >
+                <span style={{ color: theme.accent, marginTop: 2, flexShrink: 0 }}>{icons.notif}</span>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, marginBottom: 2 }}>
+                    {n.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: theme.textMuted, lineHeight: 1.6 }}>
+                    {n.body}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    <Badge color="info">{n.recipients_count} envoyé{n.recipients_count > 1 ? "s" : ""}</Badge>
+                    {n.success_count > 0 && <Badge color="success">{n.success_count} reçu{n.success_count > 1 ? "s" : ""}</Badge>}
+                    {n.failure_count > 0 && <Badge color="danger">{n.failure_count} échec{n.failure_count > 1 ? "s" : ""}</Badge>}
+                  </div>
+                </div>
+
+                <span style={{ fontSize: 11, color: theme.textGhost, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {timeAgo(n.sent_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3398,7 +3716,7 @@ export default function BackOffice() {
               {page === "events" && <EventsPage data={data} onRefresh={loadData} />}
               {page === "concours" && <ConcoursPage data={data} onRefresh={loadData} />}
               {page === "map" && <MapPage data={data} />}
-              {page === "notifications" && <NotificationsPage />}
+              {page === "notifications" && <NotificationsPage data={data} />}
             </>
           )}
         </div>
