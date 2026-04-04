@@ -3,8 +3,8 @@ import { useState, useEffect, useMemo } from "react";
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const SUPABASE_URL = "https://hcasdniyxiomqezxnaqa.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Yh8gU-n0pdIJNm0pO4ep6w_L6HqNslB";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY;
 
 // ============================================================
 // SUPABASE REST HELPER
